@@ -1,13 +1,13 @@
 import numpy as np
+from neural.Tensor import Tensor
 
 class SimpleCrossEntropy:
     def __init__(self, epsilon=1e-12):
         self.epsilon = epsilon
 
-    def __call__(self, y_pred, y_true):
+    def __call__(self, y_pred: Tensor, y_true: Tensor):
         return self.forward(y_pred, y_true)
 
-    def forward(self, y_pred, y_true):
+    def forward(self, y_pred: Tensor, y_true: Tensor):
+        return -1 * (y_true * y_pred.log()).sum()
 
-        y_pred = np.clip(y_pred, self.epsilon, 1. - self.epsilon)
-        return -np.sum(y_true * np.log(y_pred))

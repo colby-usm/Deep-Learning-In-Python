@@ -43,61 +43,69 @@ class TestPerceptron:
             print(f"[FAIL] test_inputted_weights: output = {out.data}, expected = {expected}")
 
 
-class TestActivations():
+class TestActivations:
     rng = np.random.default_rng()
 
     @staticmethod
     def test_Relu():
+        w = Tensor(TestActivations.rng.random(32, dtype=np.float32))
+        b = Tensor(TestActivations.rng.random(1, dtype=np.float32))
+        x = Tensor(TestActivations.rng.random(32, dtype=np.float32))
 
-        x = TestActivations.rng.random(32, dtype=np.float32)
-        p = Perceptron(np.uint16(32))
+        p = Perceptron((w,b))  # Perceptron expects a Tensor-compatible shape
         relu = Relu()
 
         out = relu(p(x))
 
-        expected = max(0, np.dot(p.weights, x) + p.bias)
+        expected = np.maximum(0, np.dot(p.weights.data, x.data) + p.bias.data)
 
-        if np.isclose(np.array(out), np.array(expected)):
-            print(f"[PASS] test_Relu: output = {out}")
+        if np.allclose(out.data, expected):
+            print(f"[PASS] test_Relu: output = {out.data}")
         else:
-            print(f"[FAIL] test_Relu: output = {out}, expected = {expected}")
+            print(f"[FAIL] test_Relu: output = {out.data}, expected = {expected}")
 
 
-class TestNeuralLayer():
+class TestNeuralLayer:
     rng = np.random.default_rng()
 
     @staticmethod
     def test_single_NeuralLayer():
-
         relu = Relu()
-        x = TestNeuralLayer.rng.random(256, dtype=np.float32)
 
-        nl = NeuralLayer((10, 256), initializer=HeNormal())
+        x = Tensor(TestNeuralLayer.rng.random(256, dtype=np.float32))
+ 
+        weights = Tensor(HeNormal()((10, 256)))
+        biases = Tensor(HeNormal()((10,)))
+
+        nl = NeuralLayer((weights, biases))
 
         out = relu(nl(x))
-        print(f"[Neural Layer results] {out}")
-
+        print(f"[Neural Layer results] {out.data}")
 
     @staticmethod
     def test_simple_fc_network():
-
         relu = Relu()
         softmax = Softmax()
         ce = SimpleCrossEntropy()
-        layer1 = NeuralLayer((128,64), initializer=HeNormal())
-        layer2 = NeuralLayer((10,128), initializer=HeNormal())
 
+        # Initialize layers
+        w1, b1 = Tensor(HeNormal()((128, 64))), Tensor(HeNormal()((128,)))
+        w2, b2 = Tensor(HeNormal()((10, 128))), Tensor(HeNormal()((10,)))
 
-        x = TestNeuralLayer.rng.random(64, dtype=np.float32)
-        y_true = TestNeuralLayer.rng.random(10, dtype=np.float32)
+        layer1 = NeuralLayer(data=(w1, b1))
+        layer2 = NeuralLayer(data=(w2, b2))
 
+        # Input / target
+        x = Tensor(TestNeuralLayer.rng.random(64, dtype=np.float32))
+        y_true = Tensor(TestNeuralLayer.rng.random(10, dtype=np.float32))
 
+        # Forward pass
         x = relu(layer1(x))
         y_pred = softmax(layer2(x))
         loss = ce(y_pred, y_true)
 
-        print(f"[Simple FC network output] {y_pred}")
-        print(f"[Simple FC network sum] {np.sum(y_pred)}")
+        print(f"[Simple FC network output] {y_pred.data}")
+        print(f"[Simple FC network sum] {np.sum(y_pred.data)}")
         print(f"[Simple FC network loss] {loss}")
 
 
@@ -105,7 +113,7 @@ class TestNeuralLayer():
 TestPerceptron.test_random_initialization()
 TestPerceptron.test_inputted_weights()
 
-#TestActivations.test_Relu()
-#
-#TestNeuralLayer.test_single_NeuralLayer()
-#TestNeuralLayer.test_simple_fc_network()
+TestActivations.test_Relu()
+
+TestNeuralLayer.test_single_NeuralLayer()
+TestNeuralLayer.test_simple_fc_network()
