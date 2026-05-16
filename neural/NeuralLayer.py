@@ -1,7 +1,7 @@
 from neural.Tensor import Tensor
 import numpy as np
 
-class NeuralLayer():
+class LinearLayer():
     def __init__(
         self,
         data: tuple[Tensor, Tensor],

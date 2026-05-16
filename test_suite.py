@@ -4,7 +4,7 @@ import numpy as np
 from neural.Tensor import Tensor
 from neural.Perceptron import Perceptron
 from neural.Activations import Relu, Softmax
-from neural.NeuralLayer import NeuralLayer
+from neural.LinearLayer import LinearLayer
 
 class TestPerceptron:
     rng = np.random.default_rng()
@@ -65,22 +65,22 @@ class TestActivations:
             print(f"[FAIL] test_Relu: output = {out.data}, expected = {expected}")
 
 
-class TestNeuralLayer:
+class TestLinearLayer:
     rng = np.random.default_rng()
 
     @staticmethod
-    def test_single_NeuralLayer():
+    def test_single_LinearLayer():
         relu = Relu()
 
-        x = Tensor(TestNeuralLayer.rng.random(256, dtype=np.float32))
+        x = Tensor(TestLinearLayer.rng.random(256, dtype=np.float32))
  
         weights = Tensor(HeNormal()((10, 256)))
         biases = Tensor(HeNormal()((10,)))
 
-        nl = NeuralLayer((weights, biases))
+        nl = LinearLayer((weights, biases))
 
         out = relu(nl(x))
-        print(f"[Neural Layer results] {out.data}")
+        print(f"[Linear Layer results] {out.data}")
 
     @staticmethod
     def test_simple_fc_network():
@@ -92,12 +92,12 @@ class TestNeuralLayer:
         w1, b1 = Tensor(HeNormal()((128, 64))), Tensor(HeNormal()((128,)))
         w2, b2 = Tensor(HeNormal()((10, 128))), Tensor(HeNormal()((10,)))
 
-        layer1 = NeuralLayer(data=(w1, b1))
-        layer2 = NeuralLayer(data=(w2, b2))
+        layer1 = LinearLayer(data=(w1, b1))
+        layer2 = LinearLayer(data=(w2, b2))
 
         # Input / target
-        x = Tensor(TestNeuralLayer.rng.random(64, dtype=np.float32))
-        y_true = Tensor(TestNeuralLayer.rng.random(10, dtype=np.float32))
+        x = Tensor(TestLinearLayer.rng.random(64, dtype=np.float32))
+        y_true = Tensor(TestLinearLayer.rng.random(10, dtype=np.float32))
 
         # Forward pass
         x = relu(layer1(x))
@@ -115,5 +115,5 @@ TestPerceptron.test_inputted_weights()
 
 TestActivations.test_Relu()
 
-TestNeuralLayer.test_single_NeuralLayer()
-TestNeuralLayer.test_simple_fc_network()
+TestLinearLayer.test_single_LinearLayer()
+TestLinearLayer.test_simple_fc_network()

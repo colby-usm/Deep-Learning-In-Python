@@ -31,7 +31,7 @@ class Relu(Activation):
         pass
 
 
-    @TODO fix this to perform on the tensor operations
+    #TODO: fix this to perform on the tensor operations
     def forward(self, x: Tensor):
         '''
         Relu is defined as max(0, x) for any scalar value
@@ -39,7 +39,7 @@ class Relu(Activation):
         '''
         return Tensor(np.maximum(0, x.data), requires_grad=x.requires_grad)
 
-    @TODO implement me
+    #TODO: implement me
     def __backward__():
         pass
 
@@ -57,7 +57,7 @@ class Softmax(Activation):
         return self.forward(x)
 
 
-    @TODO fix this to perform on the tensor operations
+    #TODO: fix this to perform on the tensor operations
     def forward(self, x: Tensor):
         '''
         softmax is invariant to scalar shifts, we shift to ensure numeric stability — no overflow
@@ -67,6 +67,6 @@ class Softmax(Activation):
         return Tensor(exp_x / exp_x.sum(), requires_grad=x.requires_grad)
 
 
-    @TODO implement me
+    #TODO: implement me
     def __backward__():
         pass
