@@ -1,4 +1,3 @@
-import numpy as np
 from neural.Tensor import Tensor
 
 class SimpleCrossEntropy:
