@@ -10,9 +10,15 @@ class Tensor:
 
     backward() builds a topological ordering via DFS, then performs a reverse
     topological traversal to propagate gradients through the computation graph.
-
-
     """
+
+    _rng = np.random.default_rng()
+
+    @staticmethod
+    def randn(*shape, dtype=np.float32, requires_grad=True):
+        return Tensor(
+            Tensor._rng.random(shape), dtype=dtype, requires_grad=requires_grad
+        )
 
     def __init__(
         self,
@@ -30,14 +36,6 @@ class Tensor:
         self.data = np.atleast_1d(np.array(data, dtype=self.dtype))
         self.grad = np.zeros_like(self.data, dtype=self.dtype)
 
-    @staticmethod
-    def randn(*shape, dtype=np.float32, requires_grad=True):
-        return Tensor(
-            np.random.default_rng().random(shape),
-            dtype=dtype,
-            requires_grad=requires_grad,
-        )
-
     def __repr__(self):
 
         return f"Tensor(data={self.data}, shape={self.data.shape}, dtype={self.dtype}, requires_grad={self.requires_grad})"
@@ -51,22 +49,17 @@ class Tensor:
            to accumulate gradients.
         """
 
-        visited = []
+        visited = set()
         graph = []
 
         def build(v: Tensor):
-
-            if v not in visited:
-                visited.append(v)
-
-                if v.parents is not None:
-                    for p in v.parents:
-                        build(p)
-
+            if id(v) not in visited:
+                visited.add(id(v))
+                for p in v.parents:
+                    build(p)
                 graph.append(v)
 
         build(self)
-
         self.grad = np.ones_like(self.data)
         for node in reversed(graph):
             if node.grad_fn:
@@ -459,11 +452,158 @@ class Tensor:
             Given a Tensor A, and an upstream gradient g
 
             Since y = sum(A):
-            ∂L/∂x = g broadcast to all elements
+            ∂L/∂A = g broadcast to all elements
             """
 
             if self.requires_grad:
                 self.grad += g * np.ones_like(self.data)
+
+        out.grad_fn = grad_fn
+        return out
+
+    def tanh(self):
+
+        d = (np.exp(self.data) - np.exp(-self.data)) / (
+            np.exp(self.data) + np.exp(-self.data)
+        )
+
+        out = Tensor(
+            d,
+            requires_grad=self.requires_grad,
+            parents=[self],
+        )
+
+        def grad_fn(g):
+            """
+            Given a Tensor A, and an upstream gradient g
+
+            ∂L/∂A = g(1 - tanh(A)^2)
+            """
+
+            if self.requires_grad:
+                self.grad += g * (1 - out.data**2)
+
+        out.grad_fn = grad_fn
+        return out
+
+    def relu(self):
+        out = Tensor(
+            np.maximum(self.data, 0), requires_grad=self.requires_grad, parents=[self]
+        )
+
+        def grad_fn(g):
+            """
+            Given a Tensor A, and an upstream gradient g
+
+            ∂L/∂A = g * (1 if A > 0 , 0 if A <= 0)
+            """
+            if self.requires_grad:
+                self.grad += g * (self.data > 0)
+
+        out.grad_fn = grad_fn
+        return out
+
+    def softmax(self):
+
+        shifted_data = np.exp(self.data - np.max(self.data))
+
+        out = Tensor(
+            shifted_data / np.sum(shifted_data),
+            requires_grad=self.requires_grad,
+            parents=[self],
+        )
+
+        def grad_fn(g):
+            """
+            Given a Tensor A, and an upstream gradient g
+            ∂L/∂A = A * (g - sum(g * A))
+            """
+            if self.requires_grad:
+                self.grad += out.data * (g - np.sum(g * out.data))
+
+        out.grad_fn = grad_fn
+        return out
+
+    def sigmoid(self):
+
+        # numerically stable sigmoid calculation
+        x = self.data
+        pos = 1 / (1 + np.exp(-x))
+        neg = np.exp(x) / (1 + np.exp(x))
+        d = np.where(x >= 0, pos, neg)
+
+        out = Tensor(
+            d,
+            requires_grad=self.requires_grad,
+            parents=[self],
+        )
+
+        def grad_fn(g):
+            """
+            Given a Tensor A, and an upstream gradient g
+            ∂L/∂A = g * (sigmoid(A) * (1 - sigmoid(A)))
+            """
+            if self.requires_grad:
+                self.grad += g * (out.data * (1 - out.data))
+
+        out.grad_fn = grad_fn
+        return out
+
+    def binary_cross_entropy(self, target):
+        target = (
+            target
+            if isinstance(target, Tensor)
+            else Tensor(target, requires_grad=False)
+        )
+
+        d = np.where(
+            np.abs(self.data) < self.zero_epsilon, self.zero_epsilon, self.data
+        )
+        out = Tensor(
+            -np.mean(target.data * np.log(d) + (1 - target.data) * np.log(1 - d)),
+            requires_grad=self.requires_grad,
+            parents=[self],
+        )
+
+        def grad_fn(g):
+            """
+            Given predictions P, targets Y, and upstream gradient g:
+            ∂L/∂P = g * (-(Y/P) + (1-Y)/(1-P)) / N
+            """
+            if self.requires_grad:
+                self.grad += (
+                    g
+                    * (-(target.data / d) + (1 - target.data) / (1 - d))
+                    / self.data.size
+                )
+
+        out.grad_fn = grad_fn
+        return out
+
+    def categorical_cross_entropy(self, target):
+        target = (
+            target
+            if isinstance(target, Tensor)
+            else Tensor(target, requires_grad=False)
+        )
+        d = np.where(
+            np.abs(self.data) < self.zero_epsilon, self.zero_epsilon, self.data
+        )
+
+        out = Tensor(
+            -np.mean(np.sum(target.data * np.log(d), axis=-1)),
+            requires_grad=self.requires_grad,
+            parents=[self],
+        )
+
+        def grad_fn(g):
+            """
+            Given predictions P, one-hot targets Y, and upstream gradient g:
+            ∂L/∂P = g * (-Y/P) / N
+            where N is the batch size (number of samples)
+            """
+            if self.requires_grad:
+                self.grad += g * (-target.data / d) / self.data.shape[0]
 
         out.grad_fn = grad_fn
         return out
