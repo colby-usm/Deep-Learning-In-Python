@@ -12,4 +12,4 @@ class LinearLayer:
         return self.forward(x)
 
     def forward(self, x: Tensor):
-        return x @ self.weights.T + self.biases
+        return x @ self.weights + self.biases

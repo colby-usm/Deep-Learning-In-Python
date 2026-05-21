@@ -1,3 +1,4 @@
+from graphviz import Digraph
 from neural.Initializers import HeNormal
 import numpy as np
 from neural.Tensor import Tensor
@@ -70,23 +71,85 @@ class TestLinearLayer:
         print(f"[Linear Layer results] {out.data}")
 
     @staticmethod
-    def test_simple_fc_network():
-        w1, b1 = Tensor(HeNormal()((128, 64))), Tensor(HeNormal()((128,)))
-        w2, b2 = Tensor(HeNormal()((10, 128))), Tensor(HeNormal()((10,)))
+    def test_fcn_with_mse(make_graph=True, graph_name="sigmoid_test"):
+
+        w1 = Tensor(HeNormal()((128, 1024)), name="w1")
+        b1 = Tensor(HeNormal()((1024,)), name="b1")
         layer1 = LinearLayer((w1, b1))
+
+        w2 = Tensor(HeNormal()((1024, 1024)), name="w2")
+        b2 = Tensor(HeNormal()((1024,)), name="b2")
         layer2 = LinearLayer((w2, b2))
-        x = Tensor(TestLinearLayer.rng.random(64, dtype=np.float32))
+
+        w3 = Tensor(HeNormal()((1024, 1)), name="w3")
+        b3 = Tensor(HeNormal()((1,)), name="b3")
+        layer3 = LinearLayer((w3, b3))
+
+        feat = Tensor(TestLinearLayer.rng.random(128, dtype=np.float32), name="x")
+
+        x = layer1(feat).relu()
+        x = layer2(x).relu()
+        y_pred = layer3(x).sigmoid()
+
+        y_true = Tensor(TestLinearLayer.rng.random(1, dtype=np.float32))
+        loss = y_pred.mse(y_true)
+
+        if make_graph:
+            dag = loss.backward()
+            g = draw_graph(dag)
+            g.render(graph_name, format="png", view=True)
+
+    @staticmethod
+    def test_fcn_with_cce(make_graph=False, graph_name="cce_test"):
+
+        w1 = Tensor(HeNormal()((128, 1024)), name="w1")
+        b1 = Tensor(HeNormal()((1024,)), name="b1")
+        layer1 = LinearLayer((w1, b1))
+
+        w2 = Tensor(HeNormal()((1024, 1024)), name="w2")
+        b2 = Tensor(HeNormal()((1024,)), name="b2")
+        layer2 = LinearLayer((w2, b2))
+
+        w3 = Tensor(HeNormal()((1024, 10)), name="w3")
+        b3 = Tensor(HeNormal()((10,)), name="b3")
+        layer3 = LinearLayer((w3, b3))
+
+        feat = Tensor(TestLinearLayer.rng.random(128, dtype=np.float32), name="x")
+
+        x = layer1(feat).relu()
+        x = layer2(x).relu()
+        y_pred = layer3(x).softmax()
+
         y_true = Tensor(TestLinearLayer.rng.random(10, dtype=np.float32))
-        x = layer1(x).relu()
-        y_pred = layer2(x).softmax()
         loss = y_pred.categorical_cross_entropy(y_true)
-        print(f"[Simple FC network output] {y_pred.data}")
-        print(f"[Simple FC network sum] {np.sum(y_pred.data)}")
-        print(f"[Simple FC network loss] {loss}")
+
+        if make_graph:
+            dag = loss.backward()
+            g = draw_graph(dag)
+            g.render(graph_name, format="png", view=True)
 
 
-TestPerceptron.test_random_initialization()
-TestPerceptron.test_inputted_weights()
-TestActivations.test_relu()
-TestLinearLayer.test_single_linear_layer()
-TestLinearLayer.test_simple_fc_network()
+def draw_graph(dag: list) -> Digraph:
+    print(f"Drawing Graph of len: {len(dag)}")
+    dot = Digraph()
+    for i, node in enumerate(dag):
+        print(f"At Node {i}/{len(dag) - 1} {node}")
+        nid = str(id(node))
+        op = (
+            node.name
+            if node.name
+            else (node.grad_fn.__name__ if node.grad_fn else "leaf")
+        )
+        label = f"{op}\n{node.data.shape}"
+        dot.node(nid, label)
+        for parent in node.parents:
+            dot.edge(str(id(parent)), nid)
+    return dot
+
+
+# TestPerceptron.test_random_initialization()
+# TestPerceptron.test_inputted_weights()
+# TestActivations.test_relu()
+# TestLinearLayer.test_single_linear_layer()
+TestLinearLayer.test_fcn_with_cce(True)
+TestLinearLayer.test_fcn_with_mse(True)

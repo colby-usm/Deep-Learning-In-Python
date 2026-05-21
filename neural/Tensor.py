@@ -27,6 +27,7 @@ class Tensor:
         requires_grad: bool = True,
         parents=None,
         zero_epsilon=1e-6,
+        name=None,
     ):
         self.dtype = dtype
         self.requires_grad = requires_grad
@@ -35,10 +36,14 @@ class Tensor:
         self.zero_epsilon = zero_epsilon
         self.data = np.atleast_1d(np.array(data, dtype=self.dtype))
         self.grad = np.zeros_like(self.data, dtype=self.dtype)
+        self.name = name
 
     def __repr__(self):
 
-        return f"Tensor(data={self.data}, shape={self.data.shape}, dtype={self.dtype}, requires_grad={self.requires_grad})"
+        return f"Tensor(data={self.data.shape}, shape={self.data.shape}, dtype={self.dtype}, requires_grad={self.requires_grad})"
+
+    def __str__(self):
+        return f"Tensor(shape={self.data.shape}, dtype={self.dtype}, requires_grad={self.requires_grad})"
 
     def backward(self):
         """
@@ -47,6 +52,7 @@ class Tensor:
         1. Build a topological ordering of the computation graph using DFS.
         2. Traverse nodes in reverse topological order, calling each node's grad_fn
            to accumulate gradients.
+        returns graph: the built graph of Tensor objects
         """
 
         visited = set()
@@ -65,6 +71,8 @@ class Tensor:
             if node.grad_fn:
                 node.grad_fn(node.grad)
 
+        return graph
+
     def zero_grad(self):
         self.grad = np.zeros_like(self.data)
 
@@ -79,7 +87,7 @@ class Tensor:
             parents=[self, other],
         )
 
-        def grad_fn(g):
+        def AddBackward(g):
             """
             given Tensors A,B and an upstream gradient g
             ∂A/∂x (A+B) = g
@@ -90,7 +98,7 @@ class Tensor:
             if other.requires_grad:
                 other.grad += g
 
-        t.grad_fn = grad_fn
+        t.grad_fn = AddBackward
         return t
 
     def __sub__(self, other):
@@ -104,7 +112,7 @@ class Tensor:
             parents=[self, other],
         )
 
-        def grad_fn(g):
+        def SubBackward(g):
             """
             given Tensors A,B and an upstream gradient g
             ∂A/∂x (A-B) = g
@@ -115,7 +123,7 @@ class Tensor:
             if other.requires_grad:
                 other.grad -= g
 
-        t.grad_fn = grad_fn
+        t.grad_fn = SubBackward
         return t
 
     def __radd__(self, other):
@@ -135,7 +143,7 @@ class Tensor:
             parents=[self, other],
         )
 
-        def grad_fn(g):
+        def MulBackward(g):
             """
             given Tensors A,B and an upstream gradient g
             ∂A*∂x (A*B) = g * B
@@ -146,7 +154,7 @@ class Tensor:
             if other.requires_grad:
                 other.grad += g * self.data
 
-        t.grad_fn = grad_fn
+        t.grad_fn = MulBackward
         return t
 
     def __rmul__(self, other):
@@ -168,7 +176,7 @@ class Tensor:
             parents=[self, other],
         )
 
-        def grad_fn(g):
+        def TrueDivBackward(g):
             """
             Given Tensors A,B and upstream gradient g:
             ∂L/∂A = g / B
@@ -184,7 +192,7 @@ class Tensor:
             if other.requires_grad:
                 other.grad += -g * self.data / (d**2)
 
-        t.grad_fn = grad_fn
+        t.grad_fn = TrueDivBackward
         return t
 
     def __rtruediv__(self, other):
@@ -202,7 +210,7 @@ class Tensor:
             parents=[other, self],
         )
 
-        def grad_fn(g):
+        def RTrueDivBackward(g):
             """
             Given Tensors A,B and upstream gradient g:
             ∂A/∂x (A/B)
@@ -221,7 +229,7 @@ class Tensor:
             if other.requires_grad:
                 other.grad += g / d
 
-        t.grad_fn = grad_fn
+        t.grad_fn = RTrueDivBackward
         return t
 
     def __neg__(self):
@@ -232,14 +240,14 @@ class Tensor:
             parents=[self],
         )
 
-        def grad_fn(g):
+        def NegBackward(g):
             """
             ∂A/∂x (-A) = -1
             """
             if self.requires_grad:
                 self.grad -= g
 
-        t.grad_fn = grad_fn
+        t.grad_fn = NegBackward
         return t
 
     def __pow__(self, exp):
@@ -250,7 +258,7 @@ class Tensor:
             parents=[self],
         )
 
-        def grad_fn(g):
+        def PowerBackward(g):
             """
             Given Tensor A and an upstream gradient g:
             ∂A/∂x A^{exp} = g * exp * A^{exp}
@@ -258,7 +266,7 @@ class Tensor:
             if self.requires_grad:
                 self.grad += g * (exp * (self.data ** (exp - 1)))
 
-        t.grad_fn = grad_fn
+        t.grad_fn = PowerBackward
         return t
 
     def max(self, other):
@@ -281,7 +289,7 @@ class Tensor:
             parents=[self, other],
         )
 
-        def grad_fn(g):
+        def MaxBackward(g):
             """
             Given Tensor a and b, and an upstream gradient g:
             ∂A/∂x max(A,B) is calculated for 'self' by zero-masking the entries in its data where the self.data < other.data
@@ -294,7 +302,7 @@ class Tensor:
             if other.requires_grad:
                 other.grad += g * (~mask)
 
-        t.grad_fn = grad_fn
+        t.grad_fn = MaxBackward
         return t
 
     def min(self, other):
@@ -314,7 +322,7 @@ class Tensor:
             parents=[self, other],
         )
 
-        def grad_fn(g):
+        def MinBackward(g):
             """
             Given Tensor A and B, and an upstream gradient g:
             ∂A/∂x min(A,B) is calculated for 'self' by zero-masking the entries in its data where the self.data > other.data
@@ -327,7 +335,7 @@ class Tensor:
             if other.requires_grad:
                 other.grad += g * (~mask)
 
-        t.grad_fn = grad_fn
+        t.grad_fn = MinBackward
         return t
 
     def mean(self):
@@ -338,7 +346,7 @@ class Tensor:
             parents=[self],
         )
 
-        def grad_fn(g):
+        def MeanBackward(g):
             """
             Given a Tensor A, and an upstream gradient g:
             ∂A/∂x mean(x) = g / size(A)
@@ -347,7 +355,7 @@ class Tensor:
             if self.requires_grad:
                 self.grad += (g / self.data.size) * np.ones_like(self.data)
 
-        t.grad_fn = grad_fn
+        t.grad_fn = MeanBackward
         return t
 
     def exp(self):
@@ -358,7 +366,7 @@ class Tensor:
             parents=[self],
         )
 
-        def grad_fn(g):
+        def ExpBackward(g):
             """
             Given a Tensor Aand upstream gradient g:
             dL/dx = g * exp(A)
@@ -367,7 +375,7 @@ class Tensor:
             if self.requires_grad:
                 self.grad += g * t.data
 
-        t.grad_fn = grad_fn
+        t.grad_fn = ExpBackward
         return t
 
     def log(self):
@@ -378,7 +386,7 @@ class Tensor:
             parents=[self],
         )
 
-        def grad_fn(g):
+        def LogBackward(g):
             """
             Given a Tensor Aand upstream gradient g:
             ∂A/∂x log(A) = 1/A
@@ -389,7 +397,7 @@ class Tensor:
             if self.requires_grad:
                 self.grad += g / d
 
-        t.grad_fn = grad_fn
+        t.grad_fn = LogBackward
         return t
 
     @property
@@ -403,12 +411,12 @@ class Tensor:
             parents=[self],
         )
 
-        def grad_fn(g):
+        def TransposeBackward(g):
             """∂A/∂x A.T = g.T"""
             if self.requires_grad:
                 self.grad += g.T
 
-        out.grad_fn = grad_fn
+        out.grad_fn = TransposeBackward
         return out
 
     def __matmul__(self, other):
@@ -420,21 +428,29 @@ class Tensor:
             parents=[self, other],
         )
 
-        def grad_fn(g):
+        def MatMulBackward(g):
             """
             Given two Tensors A,B and upstream gradient g:
 
             ∂L/∂A = g @ B^T
             ∂L/∂B = A^T @ g
             """
+            print(f"self={self.data.shape} other={other.data.shape} g={g.shape}")
 
             if self.requires_grad:
-                self.grad += g @ other.T.data
+                if g.ndim == 1 and self.data.ndim == 1:
+                    self.grad += other.data @ g
+
+                else:
+                    self.grad += g @ other.T.data
 
             if other.requires_grad:
-                other.grad += self.T.data @ g
+                if g.ndim == 1 and self.data.ndim == 1:
+                    other.grad += np.outer(self.data, g)
+                else:
+                    other.grad += self.T.data @ g
 
-        t.grad_fn = grad_fn
+        t.grad_fn = MatMulBackward
         return t
 
     def dot(self, other):
@@ -447,7 +463,7 @@ class Tensor:
             parents=[self],
         )
 
-        def grad_fn(g):
+        def SumBackward(g):
             """
             Given a Tensor A, and an upstream gradient g
 
@@ -458,7 +474,7 @@ class Tensor:
             if self.requires_grad:
                 self.grad += g * np.ones_like(self.data)
 
-        out.grad_fn = grad_fn
+        out.grad_fn = SumBackward
         return out
 
     def tanh(self):
@@ -473,7 +489,7 @@ class Tensor:
             parents=[self],
         )
 
-        def grad_fn(g):
+        def TanHBackward(g):
             """
             Given a Tensor A, and an upstream gradient g
 
@@ -483,7 +499,7 @@ class Tensor:
             if self.requires_grad:
                 self.grad += g * (1 - out.data**2)
 
-        out.grad_fn = grad_fn
+        out.grad_fn = TanHBackward
         return out
 
     def relu(self):
@@ -491,7 +507,7 @@ class Tensor:
             np.maximum(self.data, 0), requires_grad=self.requires_grad, parents=[self]
         )
 
-        def grad_fn(g):
+        def ReluBackward(g):
             """
             Given a Tensor A, and an upstream gradient g
 
@@ -500,7 +516,7 @@ class Tensor:
             if self.requires_grad:
                 self.grad += g * (self.data > 0)
 
-        out.grad_fn = grad_fn
+        out.grad_fn = ReluBackward
         return out
 
     def softmax(self):
@@ -513,7 +529,7 @@ class Tensor:
             parents=[self],
         )
 
-        def grad_fn(g):
+        def SoftmaxBackward(g):
             """
             Given a Tensor A, and an upstream gradient g
             ∂L/∂A = A * (g - sum(g * A))
@@ -521,7 +537,33 @@ class Tensor:
             if self.requires_grad:
                 self.grad += out.data * (g - np.sum(g * out.data))
 
-        out.grad_fn = grad_fn
+        out.grad_fn = SoftmaxBackward
+        return out
+
+    def mse(self, target):
+        target = (
+            target
+            if isinstance(target, Tensor)
+            else Tensor(target, requires_grad=False)
+        )
+
+        d = np.mean((self.data - target.data) ** 2)
+
+        out = Tensor(
+            d,
+            requires_grad=self.requires_grad,
+            parents=[self],
+        )
+
+        def MSEBackward(g):
+            """
+            Given predictions P, targets Y, and upstream gradient g:
+            ∂L/∂P = g * 2(P - Y) / N
+            """
+            if self.requires_grad:
+                self.grad += g * (2 * (self.data - target.data) / self.data.size)
+
+        out.grad_fn = MSEBackward
         return out
 
     def sigmoid(self):
@@ -538,7 +580,7 @@ class Tensor:
             parents=[self],
         )
 
-        def grad_fn(g):
+        def SigmoidBackward(g):
             """
             Given a Tensor A, and an upstream gradient g
             ∂L/∂A = g * (sigmoid(A) * (1 - sigmoid(A)))
@@ -546,7 +588,7 @@ class Tensor:
             if self.requires_grad:
                 self.grad += g * (out.data * (1 - out.data))
 
-        out.grad_fn = grad_fn
+        out.grad_fn = SigmoidBackward
         return out
 
     def binary_cross_entropy(self, target):
@@ -565,7 +607,7 @@ class Tensor:
             parents=[self],
         )
 
-        def grad_fn(g):
+        def BCEBackward(g):
             """
             Given predictions P, targets Y, and upstream gradient g:
             ∂L/∂P = g * (-(Y/P) + (1-Y)/(1-P)) / N
@@ -577,7 +619,7 @@ class Tensor:
                     / self.data.size
                 )
 
-        out.grad_fn = grad_fn
+        out.grad_fn = BCEBackward
         return out
 
     def categorical_cross_entropy(self, target):
@@ -596,7 +638,7 @@ class Tensor:
             parents=[self],
         )
 
-        def grad_fn(g):
+        def CCEBackward(g):
             """
             Given predictions P, one-hot targets Y, and upstream gradient g:
             ∂L/∂P = g * (-Y/P) / N
@@ -605,5 +647,5 @@ class Tensor:
             if self.requires_grad:
                 self.grad += g * (-target.data / d) / self.data.shape[0]
 
-        out.grad_fn = grad_fn
+        out.grad_fn = CCEBackward
         return out
