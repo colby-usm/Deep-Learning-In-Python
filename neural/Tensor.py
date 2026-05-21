@@ -32,7 +32,6 @@ class Tensor:
         self.dtype = dtype
         self.requires_grad = requires_grad
         self.parents = parents or []
-        self.grad_fn = None
         self.zero_epsilon = zero_epsilon
         self.data = np.atleast_1d(np.array(data, dtype=self.dtype))
         self.grad = np.zeros_like(self.data, dtype=self.dtype)

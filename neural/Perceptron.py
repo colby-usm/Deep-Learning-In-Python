@@ -1,7 +1,8 @@
-from neural.Tensor import Tensor
+from .Tensor import Tensor
+from .NeuralModule import NeuralModule
 
 
-class Perceptron:
+class Perceptron(NeuralModule):
     def __init__(self, data: tuple[Tensor, Tensor]):
         self.weights, self.bias = data
         self.size = self.weights.data.shape[0]
