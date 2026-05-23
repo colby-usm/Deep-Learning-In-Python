@@ -69,6 +69,13 @@ class NeuralModule:
 
         return build(self)
 
+    def parameters(self):
+        for p in self._parameters.values():
+            if p.requires_grad:
+                yield p
+        for module in self._modules.values():
+            yield from module.parameters()
+
     def forward(self, _: Tensor) -> Tensor:
         raise NotImplementedError
 

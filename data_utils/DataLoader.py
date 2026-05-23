@@ -2,15 +2,23 @@ import queue
 import threading
 from .Dataset import Dataset
 import numpy as np
+from neural.Tensor import Tensor
 
 
 class DataLoader:
+    @staticmethod
+    def _default_collate(batch):
+        images = Tensor(np.stack([x[0] for x in batch]))
+        labels = np.array([x[1] for x in batch])
+        return images, labels
+
     def __init__(
         self,
         dataset: Dataset,
         batch_size=1,
-        shuffle=(False, 42),
+        shuffle=(True, 42),
         num_workers=0,
+        name="DataLoader",
     ):
         self.dataset = dataset
         self.batch_size = batch_size
@@ -19,6 +27,14 @@ class DataLoader:
 
         if self.num_workers > 0:
             raise NotImplementedError("multi-worker not implemented")
+
+        self.name = name
+        self.collate_fn = getattr(dataset, "collate_fn", self._default_collate)
+
+    def __str__(self) -> str:
+        return (
+            f"\n-----\nDataLoader:\t{self.name}\nWith Dataset:\t{self.dataset}\n-----\n"
+        )
 
     def __iter__(self):
         return _SingleProcessDataLoaderIter(self)
@@ -66,5 +82,7 @@ class _SingleProcessDataLoaderIter:
         for start in range(0, n, self.loader.batch_size):
             batch_indices = indices[start : start + self.loader.batch_size]
             batch = [self.dataset[i] for i in batch_indices]
+            batch = self.loader.collate_fn(batch)
+
             self.queue.put(batch)
         self.queue.put(None)

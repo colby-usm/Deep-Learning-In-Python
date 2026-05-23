@@ -36,6 +36,7 @@ class Tensor:
         self.data = np.atleast_1d(np.array(data, dtype=self.dtype))
         self.grad = np.zeros_like(self.data, dtype=self.dtype)
         self.name = name
+        self.grad_fn = None
 
     def __repr__(self):
 
@@ -75,6 +76,11 @@ class Tensor:
     def zero_grad(self):
         self.grad = np.zeros_like(self.data)
 
+    def _reduce_grad(self, g: np.ndarray, target_shape: tuple) -> np.ndarray:
+        if g.shape == target_shape:
+            return g
+        return g.sum(axis=0)
+
     def __add__(self, other):
         other = (
             other if isinstance(other, Tensor) else Tensor(other, requires_grad=False)
@@ -92,10 +98,11 @@ class Tensor:
             ∂A/∂x (A+B) = g
             ∂B/∂x (A+B) = g
             """
+
             if self.requires_grad:
-                self.grad += g
+                self.grad += self._reduce_grad(g, self.data.shape)
             if other.requires_grad:
-                other.grad += g
+                other.grad += self._reduce_grad(g, other.data.shape)
 
         t.grad_fn = AddBackward
         return t
@@ -434,8 +441,6 @@ class Tensor:
             ∂L/∂A = g @ B^T
             ∂L/∂B = A^T @ g
             """
-            print(f"self={self.data.shape} other={other.data.shape} g={g.shape}")
-
             if self.requires_grad:
                 if g.ndim == 1 and self.data.ndim == 1:
                     self.grad += other.data @ g
@@ -623,16 +628,15 @@ class Tensor:
 
     def categorical_cross_entropy(self, target):
         target = (
-            target
+            target.data
             if isinstance(target, Tensor)
-            else Tensor(target, requires_grad=False)
+            else np.array(target, dtype=np.float32)
         )
         d = np.where(
             np.abs(self.data) < self.zero_epsilon, self.zero_epsilon, self.data
         )
-
         out = Tensor(
-            -np.mean(np.sum(target.data * np.log(d), axis=-1)),
+            -np.mean(np.sum(target * np.log(d), axis=-1)),
             requires_grad=self.requires_grad,
             parents=[self],
         )
@@ -644,7 +648,7 @@ class Tensor:
             where N is the batch size (number of samples)
             """
             if self.requires_grad:
-                self.grad += g * (-target.data / d) / self.data.shape[0]
+                self.grad += g * (-target / d) / self.data.shape[0]
 
         out.grad_fn = CCEBackward
         return out
