@@ -7,7 +7,13 @@ from neural.MNISTModel import MNISTModel
 from neural.Optimizers import SGD
 
 import numpy as np
-from tqdm import tqdm
+import tqdm
+
+
+LR = 1e-5
+EPOCHS = 100
+BATCH_SIZE = 1
+
 
 mnist_root = "../datasets/mnist/"
 
@@ -22,7 +28,7 @@ test_data = MNIST(
     "MNIST Test Dataset",
 )
 
-train_loader = DataLoader(train_data, name="MNIST Train")
+train_loader = DataLoader(train_data, name="MNIST Train", batch_size=BATCH_SIZE)
 test_loader = DataLoader(test_data, name="MNIST Test")
 print(train_loader)
 print(test_loader)
@@ -59,21 +65,27 @@ model = MNISTModel(
 )
 
 
-LR = 1e-5
 optimizer = SGD(model.parameters(), lr=LR)
-EPOCHS = 5
 
 
-for epoch in tqdm(range(EPOCHS)):
+for epoch in tqdm.tqdm(range(EPOCHS)):
     epoch_loss = 0.0
-    n_batches = 0
-    for images, labels in tqdm(train_loader, leave=False):
+    correct = 0
+    total = 0
+    for images, labels in tqdm.tqdm(train_loader, leave=False):
         optimizer.zero_grad()
         y_pred, logits = model(images)
         loss = logits.softmax_cross_entropy(labels)
+        p = list(model.parameters())[0]
         loss.backward()
         optimizer.step()
+
         epoch_loss += loss.data.item()
-        n_batches += 1
-    if n_batches > 0:
-        print(f"Epoch {epoch + 1}/{EPOCHS} — loss: {epoch_loss / n_batches:.4f}")
+        preds = np.argmax(y_pred.data, axis=-1)
+        targets = np.argmax(labels, axis=-1)
+        correct += np.sum(preds == targets)
+        total += len(targets)
+    if total > 0:
+        print(
+            f"Epoch {epoch + 1}/{EPOCHS} — loss: {epoch_loss / total:.4f} — acc: {correct / total:.4f}"
+        )

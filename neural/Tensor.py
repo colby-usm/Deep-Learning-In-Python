@@ -550,19 +550,11 @@ class Tensor:
             Given a Tensor A, and an upstream gradient g
             ∂L/∂A = A * (g - sum(g * A))
             """
-            print(
-                f"softmax self id: {id(self)}, grad before: {np.linalg.norm(self.grad)}"
-            )
             if self.requires_grad:
                 self.grad += Tensor._reduce_grad(
                     out.data * (g - np.sum(g * out.data, axis=-1, keepdims=True)),
                     self.data.shape,
                 )
-            print(f"softmax self grad after: {np.linalg.norm(self.grad)}")
-
-            grad = out.data * (g - np.sum(g * out.data, axis=-1, keepdims=True))
-            print(f"grad values: {grad}")
-            print(f"grad shape: {grad.shape}, target shape: {self.data.shape}")
 
         out.grad_fn = SoftmaxBackward
         return out
