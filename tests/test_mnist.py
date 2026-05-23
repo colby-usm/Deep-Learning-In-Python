@@ -64,29 +64,16 @@ optimizer = SGD(model.parameters(), lr=LR)
 EPOCHS = 5
 
 
-# train loop
 for epoch in tqdm(range(EPOCHS)):
     epoch_loss = 0.0
     n_batches = 0
-
-    for images, labels in train_loader:
-        y_pred = model(images)
-        loss = y_pred.categorical_cross_entropy(labels)
-        graph = loss.backward()
-        for node in graph:
-            if node.data.shape == (784, 64):
-                print(
-                    f"graph node id: {id(node)}, grad norm: {np.linalg.norm(node.grad)}"
-                )
-        print(f"SGD param id: {id(optimizer.params[0])}")
-        exit()
-
     for images, labels in tqdm(train_loader, leave=False):
         optimizer.zero_grad()
-        y_pred = model(images)
-        loss = y_pred.categorical_cross_entropy(labels)
+        y_pred, logits = model(images)
+        loss = logits.softmax_cross_entropy(labels)
         loss.backward()
         optimizer.step()
         epoch_loss += loss.data.item()
         n_batches += 1
-    print(f"Epoch {epoch + 1}/{EPOCHS} — loss: {epoch_loss / n_batches:.4f}")
+    if n_batches > 0:
+        print(f"Epoch {epoch + 1}/{EPOCHS} — loss: {epoch_loss / n_batches:.4f}")

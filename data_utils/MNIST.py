@@ -26,6 +26,7 @@ class MNIST(Dataset):
     @staticmethod
     def collate_fn(batch):
         images = Tensor(np.stack([x[0] for x in batch]))
-        labels = np.array([x[1] for x in batch])
-
-        return images, labels
+        labels = np.array([x[1] for x in batch], dtype=np.int32)
+        one_hot = np.zeros((len(labels), 10), dtype=np.float32)
+        one_hot[np.arange(len(labels)), labels] = 1.0
+        return images, one_hot

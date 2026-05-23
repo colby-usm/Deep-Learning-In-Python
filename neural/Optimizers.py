@@ -1,3 +1,6 @@
+import numpy as np
+
+
 class SGD:
     """
     A Stochastic Gradient Descent Algorithm
@@ -9,16 +12,11 @@ class SGD:
         self.params = params
         self.lr = lr
 
-    def step(self):
+    def step(self, clip=1.0):
         for p in self.params:
             if p.grad is not None:
-                before = p.data[0, 0]
+                np.clip(p.grad, -clip, clip, out=p.grad)
                 p.data -= self.lr * p.grad
-                after = p.data[0, 0]
-                print(
-                    f"before: {before:.6f}, after: {after:.6f}, grad: {p.grad[0, 0]:.6f}"
-                )
-                break
 
     def zero_grad(self, set_to_none=False):
         for p in self.params:

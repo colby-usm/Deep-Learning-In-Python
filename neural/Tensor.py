@@ -20,6 +20,15 @@ class Tensor:
             Tensor._rng.random(shape), dtype=dtype, requires_grad=requires_grad
         )
 
+    @staticmethod
+    def _reduce_grad(g: np.ndarray, target_shape: tuple) -> np.ndarray:
+        if g.shape == target_shape:
+            return g
+        ndim_diff = g.ndim - len(target_shape)
+        axes = tuple(range(ndim_diff))
+        g = g.sum(axis=axes) if axes else g
+        return g.reshape(target_shape)
+
     def __init__(
         self,
         data: float | int | np.floating | np.ndarray,
@@ -76,11 +85,6 @@ class Tensor:
     def zero_grad(self):
         self.grad = np.zeros_like(self.data)
 
-    def _reduce_grad(self, g: np.ndarray, target_shape: tuple) -> np.ndarray:
-        if g.shape == target_shape:
-            return g
-        return g.sum(axis=0)
-
     def __add__(self, other):
         other = (
             other if isinstance(other, Tensor) else Tensor(other, requires_grad=False)
@@ -100,9 +104,9 @@ class Tensor:
             """
 
             if self.requires_grad:
-                self.grad += self._reduce_grad(g, self.data.shape)
+                self.grad += Tensor._reduce_grad(g, self.data.shape)
             if other.requires_grad:
-                other.grad += self._reduce_grad(g, other.data.shape)
+                other.grad += Tensor._reduce_grad(g, other.data.shape)
 
         t.grad_fn = AddBackward
         return t
@@ -125,9 +129,9 @@ class Tensor:
             ∂B/∂x (A-B) = -g
             """
             if self.requires_grad:
-                self.grad += g
+                self.grad += Tensor._reduce_grad(g, self.data.shape)
             if other.requires_grad:
-                other.grad -= g
+                other.grad -= Tensor._reduce_grad(g, other.data.shape)
 
         t.grad_fn = SubBackward
         return t
@@ -156,12 +160,12 @@ class Tensor:
             ∂B*∂x (A*B) = g * A
             """
             if self.requires_grad:
-                self.grad += g * other.data
+                self.grad += Tensor._reduce_grad(g * other.data, self.data.shape)
             if other.requires_grad:
-                other.grad += g * self.data
+                other.grad += Tensor._reduce_grad(g * self.data, other.data.shape)
 
-        t.grad_fn = MulBackward
-        return t
+            t.grad_fn = MulBackward
+            return t
 
     def __rmul__(self, other):
         return self.__mul__(other)
@@ -192,11 +196,12 @@ class Tensor:
             d = np.where(
                 np.abs(other.data) < self.zero_epsilon, self.zero_epsilon, other.data
             )
-
             if self.requires_grad:
-                self.grad += g / d
+                self.grad += Tensor._reduce_grad(g / d, self.data.shape)
             if other.requires_grad:
-                other.grad += -g * self.data / (d**2)
+                other.grad += Tensor._reduce_grad(
+                    -g * self.data / (d**2), other.data.shape
+                )
 
         t.grad_fn = TrueDivBackward
         return t
@@ -222,7 +227,6 @@ class Tensor:
             ∂A/∂x (A/B)
                        = ∂A/∂x AB^{-1}
                        = B^{-1}
-
             ∂B/∂x (A/B)
                        = ∂B/∂x AB^{-1}
                        = -AB^{-2}
@@ -231,9 +235,11 @@ class Tensor:
                 np.abs(self.data) < self.zero_epsilon, self.zero_epsilon, self.data
             )
             if self.requires_grad:
-                self.grad += -g * other.data / (d**2)
+                self.grad += Tensor._reduce_grad(
+                    -g * other.data / (d**2), self.data.shape
+                )
             if other.requires_grad:
-                other.grad += g / d
+                other.grad += Tensor._reduce_grad(g / d, other.data.shape)
 
         t.grad_fn = RTrueDivBackward
         return t
@@ -251,7 +257,7 @@ class Tensor:
             ∂A/∂x (-A) = -1
             """
             if self.requires_grad:
-                self.grad -= g
+                self.grad -= Tensor._reduce_grad(g, self.data.shape)
 
         t.grad_fn = NegBackward
         return t
@@ -270,7 +276,9 @@ class Tensor:
             ∂A/∂x A^{exp} = g * exp * A^{exp}
             """
             if self.requires_grad:
-                self.grad += g * (exp * (self.data ** (exp - 1)))
+                self.grad += Tensor._reduce_grad(
+                    g * (exp * (self.data ** (exp - 1))), self.data.shape
+                )
 
         t.grad_fn = PowerBackward
         return t
@@ -303,10 +311,10 @@ class Tensor:
             """
 
             if self.requires_grad:
-                self.grad += g * mask
+                self.grad += Tensor._reduce_grad(g * mask, self.data.shape)
 
             if other.requires_grad:
-                other.grad += g * (~mask)
+                other.grad += Tensor._reduce_grad(g * (~mask), other.data.shape)
 
         t.grad_fn = MaxBackward
         return t
@@ -336,10 +344,10 @@ class Tensor:
             """
 
             if self.requires_grad:
-                self.grad += g * mask
+                self.grad += Tensor._reduce_grad(g * mask, self.data.shape)
 
             if other.requires_grad:
-                other.grad += g * (~mask)
+                other.grad += Tensor._reduce_grad(g * (~mask), other.data.shape)
 
         t.grad_fn = MinBackward
         return t
@@ -359,7 +367,9 @@ class Tensor:
             """
 
             if self.requires_grad:
-                self.grad += (g / self.data.size) * np.ones_like(self.data)
+                self.grad += Tensor._reduce_grad(
+                    (g / self.data.size) * np.ones_like(self.data), self.data.shape
+                )
 
         t.grad_fn = MeanBackward
         return t
@@ -379,7 +389,7 @@ class Tensor:
             """
 
             if self.requires_grad:
-                self.grad += g * t.data
+                self.grad += Tensor._reduce_grad(g * t.data, self.data.shape)
 
         t.grad_fn = ExpBackward
         return t
@@ -401,7 +411,7 @@ class Tensor:
                 np.abs(self.data) < self.zero_epsilon, self.zero_epsilon, self.data
             )
             if self.requires_grad:
-                self.grad += g / d
+                self.grad += Tensor._reduce_grad(g / d, self.data.shape)
 
         t.grad_fn = LogBackward
         return t
@@ -476,7 +486,9 @@ class Tensor:
             """
 
             if self.requires_grad:
-                self.grad += g * np.ones_like(self.data)
+                self.grad += Tensor._reduce_grad(
+                    g * np.ones_like(self.data), self.data.shape
+                )
 
         out.grad_fn = SumBackward
         return out
@@ -501,7 +513,7 @@ class Tensor:
             """
 
             if self.requires_grad:
-                self.grad += g * (1 - out.data**2)
+                self.grad += Tensor._reduce_grad(g * (1 - out.data**2), self.data.shape)
 
         out.grad_fn = TanHBackward
         return out
@@ -518,7 +530,7 @@ class Tensor:
             ∂L/∂A = g * (1 if A > 0 , 0 if A <= 0)
             """
             if self.requires_grad:
-                self.grad += g * (self.data > 0)
+                self.grad += Tensor._reduce_grad(g * (self.data > 0), self.data.shape)
 
         out.grad_fn = ReluBackward
         return out
@@ -538,10 +550,49 @@ class Tensor:
             Given a Tensor A, and an upstream gradient g
             ∂L/∂A = A * (g - sum(g * A))
             """
+            print(
+                f"softmax self id: {id(self)}, grad before: {np.linalg.norm(self.grad)}"
+            )
             if self.requires_grad:
-                self.grad += out.data * (g - np.sum(g * out.data))
+                self.grad += Tensor._reduce_grad(
+                    out.data * (g - np.sum(g * out.data, axis=-1, keepdims=True)),
+                    self.data.shape,
+                )
+            print(f"softmax self grad after: {np.linalg.norm(self.grad)}")
+
+            grad = out.data * (g - np.sum(g * out.data, axis=-1, keepdims=True))
+            print(f"grad values: {grad}")
+            print(f"grad shape: {grad.shape}, target shape: {self.data.shape}")
 
         out.grad_fn = SoftmaxBackward
+        return out
+
+    def softmax_cross_entropy(self, target):
+        target = (
+            target.data
+            if isinstance(target, Tensor)
+            else np.array(target, dtype=np.float32)
+        )
+
+        # forward: softmax then CCE
+        shifted = np.exp(self.data - np.max(self.data, axis=-1, keepdims=True))
+        probs = shifted / np.sum(shifted, axis=-1, keepdims=True)
+        N = self.data.shape[0] if self.data.ndim > 1 else 1
+        loss = -np.mean(np.sum(target * np.log(probs + 1e-8), axis=-1))
+
+        out = Tensor(loss, requires_grad=self.requires_grad, parents=[self])
+
+        def SoftmaxCCEBackward(g):
+            """
+            Combined softmax + CCE backward:
+            ∂L/∂x = (softmax(x) - y) / N
+            """
+            if self.requires_grad:
+                self.grad += Tensor._reduce_grad(
+                    g * (probs - target) / N, self.data.shape
+                )
+
+        out.grad_fn = SoftmaxCCEBackward
         return out
 
     def mse(self, target):
@@ -565,7 +616,10 @@ class Tensor:
             ∂L/∂P = g * 2(P - Y) / N
             """
             if self.requires_grad:
-                self.grad += g * (2 * (self.data - target.data) / self.data.size)
+                self.grad += Tensor._reduce_grad(
+                    g * (2 * (self.data - target.data) / self.data.size),
+                    self.data.shape,
+                )
 
         out.grad_fn = MSEBackward
         return out
@@ -590,23 +644,24 @@ class Tensor:
             ∂L/∂A = g * (sigmoid(A) * (1 - sigmoid(A)))
             """
             if self.requires_grad:
-                self.grad += g * (out.data * (1 - out.data))
+                self.grad += Tensor._reduce_grad(
+                    g * (out.data * (1 - out.data)), self.data.shape
+                )
 
         out.grad_fn = SigmoidBackward
         return out
 
     def binary_cross_entropy(self, target):
         target = (
-            target
+            target.data
             if isinstance(target, Tensor)
-            else Tensor(target, requires_grad=False)
+            else np.array(target, dtype=np.float32)
         )
-
         d = np.where(
             np.abs(self.data) < self.zero_epsilon, self.zero_epsilon, self.data
         )
         out = Tensor(
-            -np.mean(target.data * np.log(d) + (1 - target.data) * np.log(1 - d)),
+            -np.mean(target * np.log(d) + (1 - target) * np.log(1 - d)),
             requires_grad=self.requires_grad,
             parents=[self],
         )
@@ -616,11 +671,11 @@ class Tensor:
             Given predictions P, targets Y, and upstream gradient g:
             ∂L/∂P = g * (-(Y/P) + (1-Y)/(1-P)) / N
             """
+            N = self.data.shape[0] if self.data.ndim > 1 else 1
             if self.requires_grad:
-                self.grad += (
-                    g
-                    * (-(target.data / d) + (1 - target.data) / (1 - d))
-                    / self.data.size
+                self.grad += Tensor._reduce_grad(
+                    g * (-(target / d) + (1 - target) / (1 - d)) / N,
+                    self.data.shape,
                 )
 
         out.grad_fn = BCEBackward
@@ -648,7 +703,8 @@ class Tensor:
             where N is the batch size (number of samples)
             """
             if self.requires_grad:
-                self.grad += g * (-target / d) / self.data.shape[0]
+                N = self.data.shape[0] if self.data.ndim > 1 else 1
+                self.grad += Tensor._reduce_grad(g * (-target / d) / N, self.data.shape)
 
         out.grad_fn = CCEBackward
         return out
