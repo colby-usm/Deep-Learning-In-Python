@@ -1,6 +1,7 @@
 import queue
 import threading
 from .Dataset import Dataset
+import numpy as np
 
 
 class DataLoader:
@@ -8,12 +9,12 @@ class DataLoader:
         self,
         dataset: Dataset,
         batch_size=1,
-        shuffle=False,
+        shuffle=(False, 42),
         num_workers=0,
     ):
         self.dataset = dataset
         self.batch_size = batch_size
-        self.shuffle = shuffle
+        self.shuffle, self.shuffle_seed = shuffle
         self.num_workers = num_workers
 
         if self.num_workers > 0:
@@ -32,7 +33,7 @@ class _SingleProcessDataLoaderIter:
         self.loader = loader
         self.dataset = loader.dataset
 
-        self.queue = queue.Queue(maxsize=2 * loader.batch_size)
+        self.queue = queue.Queue(maxsize=loader.batch_size)
         self._idx = 0
 
         self.thread = threading.Thread(target=self._producer, daemon=True)
@@ -56,21 +57,14 @@ class _SingleProcessDataLoaderIter:
         return item
 
     def _producer(self):
-        """
-        The producer is the background process which keeps the iterator's queue full
-        """
         n = len(self.dataset)
-
-        while self._idx < n:
-            batch = []
-
-            for _ in range(self.loader.batch_size):
-                # this handles loading the batch. the queue will have batch_size elements at each idx
-                if self._idx >= n:
-                    break
-                batch.append(self.dataset[self._idx])
-                self._idx += 1
-
+        indices = (
+            np.random.default_rng(self.loader.shuffle_seed).permutation(n)
+            if self.loader.shuffle
+            else np.arange(n)
+        )
+        for start in range(0, n, self.loader.batch_size):
+            batch_indices = indices[start : start + self.loader.batch_size]
+            batch = [self.dataset[i] for i in batch_indices]
             self.queue.put(batch)
-
         self.queue.put(None)
