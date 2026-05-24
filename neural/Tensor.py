@@ -12,16 +12,6 @@ class Tensor:
     topological traversal to propagate gradients through the computation graph.
     """
 
-    _rng = np.random.default_rng()
-
-    @staticmethod
-    def randn(*shape, dtype=np.float32, requires_grad=True):
-        return Tensor(
-            Tensor._rng.standard_normal(shape).astype(dtype),
-            dtype=dtype,
-            requires_grad=requires_grad,
-        )
-
     @staticmethod
     def _reduce_grad(g: np.ndarray, target_shape: tuple) -> np.ndarray:
         if g.shape == target_shape:

@@ -76,7 +76,7 @@ class NeuralModule:
         for module in self._modules.values():
             yield from module.parameters()
 
-    def forward(self, _: Tensor) -> Tensor:
+    def forward(self, _: Tensor):
         raise NotImplementedError
 
     def __call__(self, x: Tensor):

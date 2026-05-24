@@ -1,6 +1,5 @@
 from data_utils.DataLoader import DataLoader
 from data_utils.MNIST import MNIST
-from neural.Tensor import Tensor
 from neural.LinearLayer import LinearLayer
 from neural.Initializers import HeNormal
 
@@ -11,9 +10,9 @@ import numpy as np
 import tqdm
 
 
-LR = 128e-4
+LR = 256e-4
 EPOCHS = 100
-BATCH_SIZE = 128
+BATCH_SIZE = 256
 
 
 mnist_root = "../datasets/mnist/"
@@ -37,9 +36,9 @@ print(test_loader)
 
 he = HeNormal()
 model = MNISTModel(
-    hl1=LinearLayer((Tensor(he((784, 64))), Tensor(he((64,)))), name="hl1"),
-    hl2=LinearLayer((Tensor(he((64, 64))), Tensor(he((64,)))), name="hl2"),
-    o=LinearLayer((Tensor(he((64, 10))), Tensor(he((10,)))), name="o"),
+    hl1=LinearLayer((784, 64), initializer=HeNormal(), name="hl1"),
+    hl2=LinearLayer((64, 64), initializer=HeNormal(), name="hl2"),
+    o=LinearLayer((64, 10), initializer=HeNormal(), name="out"),
 )
 
 
