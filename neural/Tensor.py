@@ -17,7 +17,9 @@ class Tensor:
     @staticmethod
     def randn(*shape, dtype=np.float32, requires_grad=True):
         return Tensor(
-            Tensor._rng.random(shape), dtype=dtype, requires_grad=requires_grad
+            Tensor._rng.standard_normal(shape).astype(dtype),
+            dtype=dtype,
+            requires_grad=requires_grad,
         )
 
     @staticmethod
@@ -537,10 +539,10 @@ class Tensor:
 
     def softmax(self):
 
-        shifted_data = np.exp(self.data - np.max(self.data))
+        shifted_data = np.exp(self.data - np.max(self.data, axis=-1, keepdims=True))
 
         out = Tensor(
-            shifted_data / np.sum(shifted_data),
+            shifted_data / np.sum(shifted_data, axis=-1, keepdims=True),
             requires_grad=self.requires_grad,
             parents=[self],
         )

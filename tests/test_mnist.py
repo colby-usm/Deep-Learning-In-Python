@@ -2,6 +2,7 @@ from data_utils.DataLoader import DataLoader
 from data_utils.MNIST import MNIST
 from neural.Tensor import Tensor
 from neural.LinearLayer import LinearLayer
+from neural.Initializers import HeNormal
 
 from neural.MNISTModel import MNISTModel
 from neural.Optimizers import SGD
@@ -10,9 +11,9 @@ import numpy as np
 import tqdm
 
 
-LR = 1e-5
+LR = 128e-4
 EPOCHS = 100
-BATCH_SIZE = 1
+BATCH_SIZE = 128
 
 
 mnist_root = "../datasets/mnist/"
@@ -34,58 +35,63 @@ print(train_loader)
 print(test_loader)
 
 
+he = HeNormal()
 model = MNISTModel(
-    hl1=LinearLayer(
-        (
-            Tensor.randn(784, 64),
-            Tensor.randn(
-                64,
-            ),
-        ),
-        name="hl1",
-    ),
-    hl2=LinearLayer(
-        (
-            Tensor.randn(64, 64),
-            Tensor.randn(
-                64,
-            ),
-        ),
-        name="hl2",
-    ),
-    o=LinearLayer(
-        (
-            Tensor.randn(64, 10),
-            Tensor.randn(
-                10,
-            ),
-        ),
-        name="o",
-    ),
+    hl1=LinearLayer((Tensor(he((784, 64))), Tensor(he((64,)))), name="hl1"),
+    hl2=LinearLayer((Tensor(he((64, 64))), Tensor(he((64,)))), name="hl2"),
+    o=LinearLayer((Tensor(he((64, 10))), Tensor(he((10,)))), name="o"),
 )
 
 
 optimizer = SGD(model.parameters(), lr=LR)
+print(optimizer)
 
 
-for epoch in tqdm.tqdm(range(EPOCHS)):
-    epoch_loss = 0.0
-    correct = 0
-    total = 0
-    for images, labels in tqdm.tqdm(train_loader, leave=False):
-        optimizer.zero_grad()
-        y_pred, logits = model(images)
-        loss = logits.softmax_cross_entropy(labels)
-        p = list(model.parameters())[0]
-        loss.backward()
-        optimizer.step()
+try:
+    for epoch in tqdm.tqdm(range(EPOCHS)):
+        epoch_loss = 0.0
+        correct = 0
+        total = 0
 
-        epoch_loss += loss.data.item()
-        preds = np.argmax(y_pred.data, axis=-1)
-        targets = np.argmax(labels, axis=-1)
-        correct += np.sum(preds == targets)
-        total += len(targets)
-    if total > 0:
-        print(
-            f"Epoch {epoch + 1}/{EPOCHS} — loss: {epoch_loss / total:.4f} — acc: {correct / total:.4f}"
-        )
+        for images, labels in tqdm.tqdm(train_loader, leave=False):
+            optimizer.zero_grad()
+
+            y_pred, logits = model(images)
+
+            loss = logits.softmax_cross_entropy(labels)
+
+            loss.backward()
+            optimizer.step()
+
+            epoch_loss += loss.data.item()
+
+            preds = np.argmax(y_pred.data, axis=-1)
+            targets = np.argmax(labels, axis=-1)
+
+            correct += np.sum(preds == targets)
+            total += len(targets)
+
+        if total > 0:
+            print(
+                f"Epoch {epoch + 1}/{EPOCHS} — "
+                f"loss: {epoch_loss / total:.4f} — "
+                f"acc: {correct / total:.4f}"
+            )
+
+except KeyboardInterrupt:
+    print("\nTraining interrupted. Running test evaluation...")
+
+
+test_correct = 0
+test_total = 0
+
+for images, labels in tqdm.tqdm(test_loader, leave=False):
+    y_pred, logits = model(images)
+
+    preds = np.argmax(y_pred.data, axis=-1)
+    targets = np.argmax(labels, axis=-1)
+
+    test_correct += np.sum(preds == targets)
+    test_total += len(targets)
+
+print(f"Test accuracy: {test_correct / test_total:.4f}")

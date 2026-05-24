@@ -8,9 +8,12 @@ class SGD:
 
     def __init__(self, params, lr: float):
         params = list(params)
-        print(f"num params: {len(params)}")
+        # print(f"num params: {len(params)}")
         self.params = params
         self.lr = lr
+
+    def __str__(self) -> str:
+        return f"SGD; LR:{self.lr}, parameter shape: {self.params}"
 
     def step(self, clip=1.0):
         for p in self.params:
