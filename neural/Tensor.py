@@ -14,11 +14,34 @@ class Tensor:
 
     @staticmethod
     def _reduce_grad(g: np.ndarray, target_shape: tuple) -> np.ndarray:
+        """
+        Reduces an upstream gradient g back to the target shape, handling two cases:
+            1. g has more dimensions than target (leading dims are summed away)
+            2. g has size-1 dimensions in target that were broadcast (those dims are summed and kept)
+
+        Args:
+            g: upstream gradient, may have been expanded via broadcasting
+            target_shape: the shape of the original tensor to reduce back to
+
+        Returns:
+            gradient reduced to target_shape
+        """
+
         if g.shape == target_shape:
             return g
+
+        # sum over leading dimensions if g has more dims
         ndim_diff = g.ndim - len(target_shape)
-        axes = tuple(range(ndim_diff))
-        g = g.sum(axis=axes) if axes else g
+        axes = list(range(ndim_diff))
+
+        # also sum over dimensions that were size 1 in the target (broadcast dims)
+        for i, size in enumerate(target_shape):
+            if size == 1:
+                axes.append(i + ndim_diff)
+
+        if axes:
+            g = g.sum(axis=tuple(axes), keepdims=True)
+
         return g.reshape(target_shape)
 
     def __init__(
@@ -344,24 +367,25 @@ class Tensor:
         t.grad_fn = MinBackward
         return t
 
-    def mean(self):
+    def mean(self, axis=None):
         t = Tensor(
-            np.mean(self.data),
+            np.mean(self.data, axis=axis),
             dtype=self.dtype,
             requires_grad=self.requires_grad,
             parents=[self],
         )
 
         def MeanBackward(g):
-            """
-            Given a Tensor A, and an upstream gradient g:
-            ∂A/∂x mean(x) = g / size(A)
-            """
-
             if self.requires_grad:
-                self.grad += Tensor._reduce_grad(
-                    (g / self.data.size) * np.ones_like(self.data), self.data.shape
-                )
+                if axis is None:
+                    # global mean, gradient is uniform
+                    grad = (g / self.data.size) * np.ones_like(self.data)
+                else:
+                    # number of elements that were averaged along the axis
+                    n = self.data.shape[axis]
+                    # restore the reduced dimension so broadcasting works
+                    grad = np.expand_dims(g, axis=axis) * np.ones_like(self.data) / n
+                self.grad += Tensor._reduce_grad(grad, self.data.shape)
 
         t.grad_fn = MeanBackward
         return t

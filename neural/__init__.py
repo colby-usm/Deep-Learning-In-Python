@@ -8,3 +8,5 @@ from .Initializers import (
     LeCunUniform,
     UniformInitializer,
 )
+
+from .Tensor import Tensor
