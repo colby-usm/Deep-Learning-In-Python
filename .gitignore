@@ -4,3 +4,4 @@ __pycache__/*
 *.bkp
 *.dtmp
 *.pyc
+*.egg-info/

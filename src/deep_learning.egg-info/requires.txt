@@ -1,4 +1,0 @@
-basedpyright>=1.39.5
-debugpy>=1.8.20
-numpy>=2.4.6
-tqdm>=4.67.3
