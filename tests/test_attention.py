@@ -2,7 +2,12 @@ from neural.Initializers import HeNormal
 from neural.Attention import Attention
 from neural.LinearLayer import LinearLayer
 from neural.NeuralModule import NeuralModule
-from neural.Tensor import Tensor
+from neural.MNISTModel import MNISTModel
+from neural.Optimizers import SGD
+import numpy as np
+import tqdm
+from data_utils.MNIST_VIT import MNIST_VIT
+from data_utils.DataLoader import DataLoader
 
 
 class AttenNet(NeuralModule):
@@ -11,8 +16,13 @@ class AttenNet(NeuralModule):
             modules={"attention": attention, "hl1": hl1, "hl2": hl2, "o": o}, name=name
         )
 
-    def forward():
-        pass
+    def forward(self, x):
+        x = self._modules["attention"](x)
+        x = self._modules["hl1"](x).relu()
+        x = self._modules["hl2"](x).relu()
+        logits = self._modules["o"](x)
+        logits = logits.mean(axis=1)
+        return logits.softmax(), logits
 
     @property
     def in_features(self) -> int:
@@ -25,27 +35,28 @@ class AttenNet(NeuralModule):
 
 he_normal = HeNormal()
 
-
 ATTENTION_DIMENSION = 128
 
 IMAGE_H = 224
 IMAGE_L = 224
-PATCH_STRIDE = 14
-TOKEN_H = IMAGE_H // PATCH_STRIDE
-TOKEN_L = IMAGE_L // PATCH_STRIDE
-TOKEN_DIM = TOKEN_H * TOKEN_L
+
+PATCH_H = 14
+PATCH_L = 14
+PATCH_DIM = PATCH_H * PATCH_L  # 196
+ATTN_DIM = 128
+NUM_TOKENS = 256
 
 
 attention = Attention(
     linear_layers=(
         LinearLayer(
-            (TOKEN_DIM, ATTENTION_DIMENSION), initializer=HeNormal(), name="q_proj"
+            (PATCH_DIM, ATTENTION_DIMENSION), initializer=HeNormal(), name="q_proj"
         ),
         LinearLayer(
-            (TOKEN_DIM, ATTENTION_DIMENSION), initializer=HeNormal(), name="k_proj"
+            (PATCH_DIM, ATTENTION_DIMENSION), initializer=HeNormal(), name="k_proj"
         ),
         LinearLayer(
-            (TOKEN_DIM, ATTENTION_DIMENSION), initializer=HeNormal(), name="v_proj"
+            (PATCH_DIM, ATTENTION_DIMENSION), initializer=HeNormal(), name="v_proj"
         ),
     ),
     dimension=ATTENTION_DIMENSION,
@@ -57,6 +68,84 @@ hl1 = LinearLayer((ATTENTION_DIMENSION, 64))
 hl2 = LinearLayer((64, 64))
 o = LinearLayer((64, 10))
 
-atten_net_1 = AttenNet(attention, hl1, hl2, o, name="Attention Net 1")
+model = AttenNet(attention, hl1, hl2, o, name="Attention Net 1")
 
-print(atten_net_1)
+print(model)
+
+
+mnist_root = "../../datasets/mnist/"
+
+train_data = MNIST_VIT(
+    mnist_root + "train-images-idx3-ubyte",
+    mnist_root + "train-labels-idx1-ubyte",
+    patch_size=PATCH_L,
+    name="MNIST Train Dataset",
+)
+test_data = MNIST_VIT(
+    mnist_root + "t10k-images-idx3-ubyte",
+    mnist_root + "t10k-labels-idx1-ubyte",
+    patch_size=PATCH_L,
+    name="MNIST Test Dataset",
+)
+
+
+LR = 1e-4
+EPOCHS = 100
+BATCH_SIZE = 1
+
+train_loader = DataLoader(train_data, name="MNIST Train", batch_size=BATCH_SIZE)
+test_loader = DataLoader(test_data, name="MNIST Test")
+
+
+optimizer = SGD(model.parameters(), lr=LR)
+print(optimizer)
+
+
+try:
+    for epoch in tqdm.tqdm(range(EPOCHS)):
+        epoch_loss = 0.0
+        correct = 0
+        total = 0
+
+        for images, labels in tqdm.tqdm(train_loader, leave=False):
+            optimizer.zero_grad()
+
+            y_pred, logits = model(images)
+
+            loss = logits.softmax_cross_entropy(labels)
+
+            loss.backward()
+            optimizer.step()
+
+            epoch_loss += loss.data.item()
+
+            preds = np.argmax(y_pred.data, axis=-1)
+            targets = np.argmax(labels, axis=-1)
+
+            correct += np.sum(preds == targets)
+            total += len(targets)
+
+        if total > 0:
+            print(
+                f"Epoch {epoch + 1}/{EPOCHS} — "
+                f"loss: {epoch_loss / total:.4f} — "
+                f"acc: {correct / total:.4f}"
+            )
+
+except KeyboardInterrupt:
+    print("\nTraining interrupted. Running test evaluation...")
+
+
+test_correct = 0
+test_total = 0
+
+for images, labels in tqdm.tqdm(test_loader, leave=False):
+    y_pred, logits = model(images)
+
+    preds = np.argmax(y_pred.data, axis=-1)
+    targets = np.argmax(labels, axis=-1)
+
+    test_correct += np.sum(preds == targets)
+    test_total += len(targets)
+
+print(f"Test accuracy: {test_correct / test_total:.4f}")

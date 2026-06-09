@@ -27,20 +27,14 @@ class Tensor:
             gradient reduced to target_shape
         """
 
-        if g.shape == target_shape:
-            return g
+        # 1. reshape g to align dims
+        while g.ndim > len(target_shape):
+            g = g.sum(axis=0)
 
-        # sum over leading dimensions if g has more dims
-        ndim_diff = g.ndim - len(target_shape)
-        axes = list(range(ndim_diff))
-
-        # also sum over dimensions that were size 1 in the target (broadcast dims)
-        for i, size in enumerate(target_shape):
-            if size == 1:
-                axes.append(i + ndim_diff)
-
-        if axes:
-            g = g.sum(axis=tuple(axes), keepdims=True)
+        # 2. now handle broadcasted dimensions
+        for i in range(len(target_shape)):
+            if target_shape[i] == 1 and g.shape[i] != 1:
+                g = g.sum(axis=i, keepdims=True)
 
         return g.reshape(target_shape)
 
@@ -179,8 +173,8 @@ class Tensor:
             if other.requires_grad:
                 other.grad += Tensor._reduce_grad(g * self.data, other.data.shape)
 
-            t.grad_fn = MulBackward
-            return t
+        t.grad_fn = MulBackward
+        return t
 
     def __rmul__(self, other):
         return self.__mul__(other)
@@ -438,7 +432,7 @@ class Tensor:
         Standard Transpose function
         """
         out = Tensor(
-            self.data.swapaxes(-1,-2),
+            self.data.swapaxes(-1, -2),
             requires_grad=self.requires_grad,
             parents=[self],
         )
@@ -446,7 +440,7 @@ class Tensor:
         def TransposeBackward(g):
             """∂A/∂x A.T = g.T"""
             if self.requires_grad:
-                self.grad += g.swapaxes(-1,-2)
+                self.grad += g.swapaxes(-1, -2)
 
         out.grad_fn = TransposeBackward
         return out
@@ -467,11 +461,20 @@ class Tensor:
             ∂L/∂A = g @ B^T
             ∂L/∂B = A^T @ g
             """
+            A = self.data
+            B = other.data
+
             if self.requires_grad:
-                self.grad += np.matmul(g, other.data.swapaxes(-1, -2))
+                self.grad += np.matmul(g, B.swapaxes(-1, -2))
 
             if other.requires_grad:
-                other.grad += np.matmul(self.data.swapaxes(-1, -2), g)
+                grad_B = np.matmul(A.swapaxes(-1, -2), g)
+
+                # collapse all leading batch/token dims
+                while grad_B.ndim > 2:
+                    grad_B = grad_B.sum(axis=0)
+
+                other.grad += grad_B
 
         t.grad_fn = MatMulBackward
         return t
