@@ -10,9 +10,9 @@ import numpy as np
 import tqdm
 
 
-LR = 1e-5
-EPOCHS = 10
-BATCH_SIZE = 1
+LR = 64e-5
+EPOCHS = 100
+BATCH_SIZE = 64
 
 
 mnist_root = "../../datasets/mnist/"

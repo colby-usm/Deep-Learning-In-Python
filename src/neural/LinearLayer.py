@@ -18,7 +18,9 @@ class LinearLayer(NeuralModule):
         assert len(data) == 2, f"data must be a tuple of length 2, received {len(data)}"
         assert all(isinstance(d, Tensor) for d in data) or all(
             isinstance(d, int) for d in data
-        ), "data must be either a tuple of Tensors or a tuple of ints"
+        ), (
+            f"data must be either a tuple of Tensors or a tuple of ints, received: {type(data[0])} and {type(data[1])}"
+        )
 
         if isinstance(data[0], int) and isinstance(data[1], int):
             in_features: int = data[0]
@@ -44,7 +46,6 @@ class LinearLayer(NeuralModule):
     @property
     def shape(self) -> tuple[int, int]:
         return (self.in_features, self.out_features)
-
 
     def __call__(self, x: Tensor):
         return self.forward(x)
