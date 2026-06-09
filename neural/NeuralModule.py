@@ -1,8 +1,10 @@
 from typing import Any
+from abc import ABC, abstractmethod
+
 from .Tensor import Tensor
 
 
-class NeuralModule:
+class NeuralModule(ABC):
     """
     The base class for all neural based modules within this library.
     It collects parameters and submodules for easy gradient updates.
@@ -76,8 +78,20 @@ class NeuralModule:
         for module in self._modules.values():
             yield from module.parameters()
 
-    def forward(self, _: Tensor):
-        raise NotImplementedError
+    @abstractmethod
+    def forward(self, x : Tensor) -> Tensor | tuple[Tensor, ...]:
+        pass
+
+
+    @property
+    @abstractmethod
+    def in_features(self) -> int:
+        pass
+
+    @property
+    @abstractmethod
+    def out_features(self) -> int:
+        pass
 
     def __call__(self, x: Tensor):
         return self.forward(x)

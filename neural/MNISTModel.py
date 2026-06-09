@@ -12,3 +12,14 @@ class MNISTModel(NeuralModule):
         x = self._modules["hl2"](x).relu()
         logits = self._modules["o"](x)
         return logits.softmax(), logits
+
+
+
+    @property
+    def in_features(self) -> int:
+        return self._modules["hl1"].in_features
+
+
+    @property
+    def out_features(self) -> int:
+        return self._modules["o"].out_features

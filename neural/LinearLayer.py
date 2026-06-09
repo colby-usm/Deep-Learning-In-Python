@@ -33,8 +33,21 @@ class LinearLayer(NeuralModule):
                 f"data must be either both ints or both Tensors, received {type(data[0])}, and {type(data[1])}"
             )
 
+    @property
+    def in_features(self) -> int:
+        return self.weights.data.shape[0]
+
+    @property
+    def out_features(self) -> int:
+        return self.weights.data.shape[1]
+
+    @property
+    def shape(self) -> tuple[int, int]:
+        return (self.in_features, self.out_features)
+
+
     def __call__(self, x: Tensor):
         return self.forward(x)
 
-    def forward(self, x: Tensor):
+    def forward(self, x: Tensor) -> Tensor:
         return x @ self.weights + self.biases

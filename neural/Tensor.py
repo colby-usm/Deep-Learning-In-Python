@@ -438,7 +438,7 @@ class Tensor:
         Standard Transpose function
         """
         out = Tensor(
-            self.data.T,
+            self.data.swapaxes(-1,-2),
             requires_grad=self.requires_grad,
             parents=[self],
         )
@@ -446,7 +446,7 @@ class Tensor:
         def TransposeBackward(g):
             """∂A/∂x A.T = g.T"""
             if self.requires_grad:
-                self.grad += g.T
+                self.grad += g.swapaxes(-1,-2)
 
         out.grad_fn = TransposeBackward
         return out
@@ -454,7 +454,7 @@ class Tensor:
     def __matmul__(self, other):
         other = other if isinstance(other, Tensor) else Tensor(other)
         t = Tensor(
-            np.dot(self.data, other.data),
+            np.matmul(self.data, other.data),
             dtype=self.dtype,
             requires_grad=self.requires_grad or other.requires_grad,
             parents=[self, other],
@@ -468,17 +468,10 @@ class Tensor:
             ∂L/∂B = A^T @ g
             """
             if self.requires_grad:
-                if g.ndim == 1 and self.data.ndim == 1:
-                    self.grad += other.data @ g
-
-                else:
-                    self.grad += g @ other.T.data
+                self.grad += np.matmul(g, other.data.swapaxes(-1, -2))
 
             if other.requires_grad:
-                if g.ndim == 1 and self.data.ndim == 1:
-                    other.grad += np.outer(self.data, g)
-                else:
-                    other.grad += self.T.data @ g
+                other.grad += np.matmul(self.data.swapaxes(-1, -2), g)
 
         t.grad_fn = MatMulBackward
         return t
@@ -551,12 +544,12 @@ class Tensor:
         out.grad_fn = ReluBackward
         return out
 
-    def softmax(self):
+    def softmax(self, axis=-1):
 
-        shifted_data = np.exp(self.data - np.max(self.data, axis=-1, keepdims=True))
+        shifted_data = np.exp(self.data - np.max(self.data, axis=axis, keepdims=True))
 
         out = Tensor(
-            shifted_data / np.sum(shifted_data, axis=-1, keepdims=True),
+            shifted_data / np.sum(shifted_data, axis=axis, keepdims=True),
             requires_grad=self.requires_grad,
             parents=[self],
         )
@@ -568,14 +561,14 @@ class Tensor:
             """
             if self.requires_grad:
                 self.grad += Tensor._reduce_grad(
-                    out.data * (g - np.sum(g * out.data, axis=-1, keepdims=True)),
+                    out.data * (g - np.sum(g * out.data, axis=axis, keepdims=True)),
                     self.data.shape,
                 )
 
         out.grad_fn = SoftmaxBackward
         return out
 
-    def softmax_cross_entropy(self, target):
+    def softmax_cross_entropy(self, target, axis=-1):
         target = (
             target.data
             if isinstance(target, Tensor)
@@ -583,10 +576,10 @@ class Tensor:
         )
 
         # forward: softmax then CCE
-        shifted = np.exp(self.data - np.max(self.data, axis=-1, keepdims=True))
-        probs = shifted / np.sum(shifted, axis=-1, keepdims=True)
-        N = self.data.shape[0] if self.data.ndim > 1 else 1
-        loss = -np.mean(np.sum(target * np.log(probs + 1e-8), axis=-1))
+        shifted = np.exp(self.data - np.max(self.data, axis=axis, keepdims=True))
+        probs = shifted / np.sum(shifted, axis=axis, keepdims=True)
+        N = self.data.shape[0] * self.data.shape[1] if self.data.ndim > 1 else 1
+        loss = -np.mean(np.sum(target * np.log(probs + 1e-8), axis=axis))
 
         out = Tensor(loss, requires_grad=self.requires_grad, parents=[self])
 
