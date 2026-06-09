@@ -15,7 +15,7 @@ EPOCHS = 100
 BATCH_SIZE = 256
 
 
-mnist_root = "../datasets/mnist/"
+mnist_root = "../../datasets/mnist/"
 
 train_data = MNIST(
     mnist_root + "train-images-idx3-ubyte",
