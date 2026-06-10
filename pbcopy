@@ -16,14 +16,11 @@ class AttenNet(NeuralModule):
         )
 
     def forward(self, x):
-
         x = self._modules["attention"](x)
         x = self._modules["hl1"](x).relu()
         x = self._modules["hl2"](x).relu()
-
-        x = x.mean(axis=1)
         logits = self._modules["o"](x)
-
+        logits = logits.mean(axis=1)
         return logits.softmax(), logits
 
     @property
@@ -136,21 +133,6 @@ try:
 
 except KeyboardInterrupt:
     print("\nTraining interrupted. Running test evaluation...")
-
-
-train_correct = 0
-train_total = 0
-
-for images, labels in train_loader:
-    y_pred, _ = model(images)
-
-    preds = np.argmax(y_pred.data, axis=-1)
-    targets = np.argmax(labels, axis=-1)
-
-    train_correct += np.sum(preds == targets)
-    train_total += len(targets)
-
-print("Final train accuracy:", train_correct / train_total)
 
 
 test_correct = 0
